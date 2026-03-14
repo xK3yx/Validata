@@ -1,4 +1,4 @@
-# Validata — AI Startup Idea Validator
+# Validata - AI Startup Idea Validator
 
 Validate your startup or SaaS idea in seconds with a comprehensive AI-powered report. Powered by **Llama 3.3 70B** via Groq.
 

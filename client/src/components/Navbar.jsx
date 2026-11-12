@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../api/client';
-import { getClientId } from '../utils/clientId';
 
 export default function Navbar() {
   const { pathname } = useLocation();
   const [usage, setUsage] = useState(null);
 
   useEffect(() => {
-    api.get('/validate/usage', { headers: { 'X-Client-ID': getClientId() } })
+    api.get('/validate/usage')
       .then(({ data }) => setUsage(data))
       .catch(() => {});
   }, [pathname]);
@@ -31,12 +30,6 @@ export default function Navbar() {
           <NavLink to="/" active={pathname === '/'}>Home</NavLink>
           <NavLink to="/compare" active={pathname === '/compare'}>Compare</NavLink>
           <NavLink to="/history" active={pathname === '/history'}>History</NavLink>
-          <NavLink to="/pricing" active={pathname === '/pricing'}>
-            <span className="flex items-center gap-1">
-              Pricing
-              <span className="text-xs bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-full font-medium">Pro</span>
-            </span>
-          </NavLink>
         </div>
 
         {/* Usage pill */}
@@ -50,9 +43,6 @@ export default function Navbar() {
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${usage.remaining === 0 ? 'bg-rose-500' : usage.remaining <= 2 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
             {usage.remaining === 0 ? 'Limit reached' : `${usage.remaining} left today`}
-            {usage.remaining === 0 && (
-              <Link to="/pricing" className="text-indigo-400 hover:text-indigo-300 ml-1 font-medium">Upgrade</Link>
-            )}
           </div>
         )}
       </nav>

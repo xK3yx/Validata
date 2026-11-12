@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import IdeaForm from '../components/IdeaForm';
 import api from '../api/client';
-import { getClientId } from '../utils/clientId';
 
 export default function Home() {
   const location = useLocation();
@@ -10,7 +9,7 @@ export default function Home() {
   const [usage, setUsage] = useState(null);
 
   useEffect(() => {
-    api.get('/validate/usage', { headers: { 'X-Client-ID': getClientId() } })
+    api.get('/validate/usage')
       .then(({ data }) => setUsage(data))
       .catch(() => {});
   }, []);
@@ -62,7 +61,7 @@ export default function Home() {
             }`}>
               <span className={`w-2 h-2 rounded-full ${usage.remaining === 0 ? 'bg-rose-500' : usage.remaining <= 2 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
               {usage.remaining === 0 ? (
-                <>Daily limit reached · <Link to="/pricing" className="underline ml-1">Upgrade to Pro</Link></>
+                <>Daily limit reached · resets at midnight UTC</>
               ) : (
                 <>{usage.remaining} free validation{usage.remaining !== 1 ? 's' : ''} remaining today</>
               )}

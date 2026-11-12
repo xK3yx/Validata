@@ -7,6 +7,7 @@ import IdeaRadarChart from '../components/IdeaRadarChart';
 import CompetitorModal from '../components/CompetitorModal';
 import ChatWidget from '../components/ChatWidget';
 import { PDFDownloadButton } from '../components/PDFReport';
+import { MarketSizeBadge, SourcesCard } from '../components/Sources';
 
 const VERDICT_CONFIG = {
   'Highly Promising': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-500' },
@@ -209,12 +210,7 @@ export default function Results() {
               Market Opportunity
             </h2>
             <ScoreBar score={report.market_opportunity?.score || 0} />
-            {report.market_opportunity?.market_size && (
-              <div className="mt-2 inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
-                <span className="text-xs text-slate-400">TAM:</span>
-                <span className="text-sm font-semibold text-emerald-400">{report.market_opportunity.market_size}</span>
-              </div>
-            )}
+            <MarketSizeBadge report={report} className="mt-2" />
             <p className="text-slate-400 text-xs mt-2 leading-relaxed line-clamp-3">{report.market_opportunity?.analysis}</p>
           </ReportCard>
           <ReportCard className="p-5" delay={190}>
@@ -337,6 +333,8 @@ export default function Results() {
           </div>
         </ReportCard>
       )}
+
+      <SourcesCard sources={report.sources} delay={400} />
 
       {/* CTA Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-2">

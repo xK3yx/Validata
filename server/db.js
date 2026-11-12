@@ -2,7 +2,13 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { randomUUID } = require('crypto');
 
-const db = new Database(path.join(__dirname, '..', 'validata.db'));
+// VALIDATA_DB_PATH=":memory:" is used by the test suite.
+const DB_PATH = process.env.VALIDATA_DB_PATH || path.join(__dirname, '..', 'validata.db');
+const db = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+const FREE_LIMIT = Number(process.env.DAILY_FREE_LIMIT) || 5;
 
 function initDb() {
   db.exec(`
@@ -36,21 +42,28 @@ function initDb() {
     );
   `);
 
-  // Migrate: add share_id column if it doesn't exist.
-  // SQLite does NOT allow UNIQUE constraints in ALTER TABLE ADD COLUMN,
-  // so we add the plain column first, then create the index separately.
-  try { db.exec(`ALTER TABLE analyses ADD COLUMN share_id TEXT`); } catch (_) {}
-  try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_analyses_share_id ON analyses(share_id)`); } catch (_) {}
+  // Migrations for databases created by older versions.
+  // SQLite does not allow UNIQUE constraints in ALTER TABLE ADD COLUMN,
+  // so columns are added plain and indexed separately.
+  const columns = db.prepare(`PRAGMA table_info(analyses)`).all().map(c => c.name);
+  if (!columns.includes('share_id')) db.exec(`ALTER TABLE analyses ADD COLUMN share_id TEXT`);
+  if (!columns.includes('client_id')) db.exec(`ALTER TABLE analyses ADD COLUMN client_id TEXT`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_analyses_share_id ON analyses(share_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_analyses_client_id ON analyses(client_id, created_at)`);
 }
 
 // ─── Analyses ────────────────────────────────────────────────────────────────
-function saveAnalysis({ idea_title, idea_description, target_audience, industry, report, viability_score }) {
+// Every analysis belongs to the browser (client_id) that created it. History
+// reads and deletes are scoped to that owner; public access is only through
+// the unguessable share_id.
+
+function saveAnalysis({ client_id, idea_title, idea_description, target_audience, industry, report, viability_score }) {
   const share_id = randomUUID();
-  const stmt = db.prepare(`
-    INSERT INTO analyses (idea_title, idea_description, target_audience, industry, report, viability_score, share_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const result = stmt.run(
+  const result = db.prepare(`
+    INSERT INTO analyses (client_id, idea_title, idea_description, target_audience, industry, report, viability_score, share_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    client_id,
     idea_title,
     idea_description,
     target_audience || null,
@@ -59,86 +72,81 @@ function saveAnalysis({ idea_title, idea_description, target_audience, industry,
     viability_score,
     share_id
   );
-  return { id: result.lastInsertRowid, share_id };
+  return { id: Number(result.lastInsertRowid), share_id };
 }
 
-function getAllAnalyses() {
+function getAnalysesForClient(client_id) {
   return db.prepare(`
     SELECT id, idea_title, industry, viability_score, share_id, created_at,
            json_extract(report, '$.verdict') as verdict
     FROM analyses
-    ORDER BY created_at DESC
-  `).all();
+    WHERE client_id = ?
+    ORDER BY created_at DESC, id DESC
+  `).all(client_id);
 }
 
-function getAnalysisById(id) {
-  const row = db.prepare(`SELECT * FROM analyses WHERE id = ?`).get(id);
+function parseRow(row) {
   if (!row) return null;
-  return { ...row, report: JSON.parse(row.report) };
+  const { client_id, ...rest } = row;
+  return { ...rest, report: JSON.parse(row.report) };
+}
+
+function getAnalysisForClient(id, client_id) {
+  return parseRow(db.prepare(`SELECT * FROM analyses WHERE id = ? AND client_id = ?`).get(id, client_id));
 }
 
 function getAnalysisByShareId(share_id) {
-  const row = db.prepare(`SELECT * FROM analyses WHERE share_id = ?`).get(share_id);
-  if (!row) return null;
-  return { ...row, report: JSON.parse(row.report) };
+  return parseRow(db.prepare(`SELECT * FROM analyses WHERE share_id = ?`).get(share_id));
 }
 
-function deleteAnalysis(id) {
-  const result = db.prepare(`DELETE FROM analyses WHERE id = ?`).run(id);
-  return result.changes > 0;
+function deleteAnalysisForClient(id, client_id) {
+  return db.prepare(`DELETE FROM analyses WHERE id = ? AND client_id = ?`).run(id, client_id).changes > 0;
 }
 
 // ─── Usage Tracking ──────────────────────────────────────────────────────────
-const FREE_LIMIT = 5;
-
-function checkAndIncrementUsage(clientId) {
-  if (!clientId) return { allowed: true, remaining: FREE_LIMIT - 1, used: 1 };
-  const today = new Date().toISOString().split('T')[0];
-
-  const existing = db.prepare(
-    `SELECT count FROM usage_tracking WHERE client_id = ? AND date = ?`
-  ).get(clientId, today);
-
-  if (existing && existing.count >= FREE_LIMIT) {
-    return { allowed: false, remaining: 0, used: existing.count };
-  }
-
-  if (existing) {
-    db.prepare(
-      `UPDATE usage_tracking SET count = count + 1 WHERE client_id = ? AND date = ?`
-    ).run(clientId, today);
-    const used = existing.count + 1;
-    return { allowed: true, remaining: FREE_LIMIT - used, used };
-  } else {
-    db.prepare(
-      `INSERT INTO usage_tracking (client_id, date, count) VALUES (?, ?, 1)`
-    ).run(clientId, today);
-    return { allowed: true, remaining: FREE_LIMIT - 1, used: 1 };
-  }
+function today() {
+  return new Date().toISOString().split('T')[0];
 }
 
-function getUsageInfo(clientId) {
-  if (!clientId) return { used: 0, remaining: FREE_LIMIT, limit: FREE_LIMIT };
-  const today = new Date().toISOString().split('T')[0];
-  const row = db.prepare(
-    `SELECT count FROM usage_tracking WHERE client_id = ? AND date = ?`
-  ).get(clientId, today);
+function getUsageInfo(client_id) {
+  const row = db.prepare(`SELECT count FROM usage_tracking WHERE client_id = ? AND date = ?`).get(client_id, today());
   const used = row?.count || 0;
   return { used, remaining: Math.max(0, FREE_LIMIT - used), limit: FREE_LIMIT };
 }
 
+// Atomically reserve `amount` validations. Returns { allowed, remaining }.
+const reserveUsage = db.transaction((client_id, amount = 1) => {
+  const { used } = getUsageInfo(client_id);
+  if (used + amount > FREE_LIMIT) {
+    return { allowed: false, remaining: Math.max(0, FREE_LIMIT - used) };
+  }
+  db.prepare(`
+    INSERT INTO usage_tracking (client_id, date, count) VALUES (?, ?, ?)
+    ON CONFLICT(client_id, date) DO UPDATE SET count = count + excluded.count
+  `).run(client_id, today(), amount);
+  return { allowed: true, remaining: FREE_LIMIT - used - amount };
+});
+
+// Give back reserved validations when the AI call fails, so errors don't burn quota.
+function releaseUsage(client_id, amount = 1) {
+  db.prepare(`
+    UPDATE usage_tracking SET count = MAX(0, count - ?) WHERE client_id = ? AND date = ?
+  `).run(amount, client_id, today());
+}
+
 // ─── Comparisons ─────────────────────────────────────────────────────────────
 function saveComparison({ analysis_a_id, analysis_b_id, winner, comparison_summary }) {
-  const result = db.prepare(`
+  return Number(db.prepare(`
     INSERT INTO comparisons (analysis_a_id, analysis_b_id, winner, comparison_summary)
     VALUES (?, ?, ?, ?)
-  `).run(analysis_a_id, analysis_b_id, winner, comparison_summary);
-  return result.lastInsertRowid;
+  `).run(analysis_a_id, analysis_b_id, winner, comparison_summary).lastInsertRowid);
 }
 
 module.exports = {
+  db,
+  FREE_LIMIT,
   initDb,
-  saveAnalysis, getAllAnalyses, getAnalysisById, getAnalysisByShareId, deleteAnalysis,
-  checkAndIncrementUsage, getUsageInfo,
+  saveAnalysis, getAnalysesForClient, getAnalysisForClient, getAnalysisByShareId, deleteAnalysisForClient,
+  getUsageInfo, reserveUsage, releaseUsage,
   saveComparison,
 };

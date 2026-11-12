@@ -6,7 +6,6 @@ import Results from './pages/Results';
 import History from './pages/History';
 import Compare from './pages/Compare';
 import Share from './pages/Share';
-import Pricing from './pages/Pricing';
 
 export default function App() {
   return (
@@ -20,7 +19,6 @@ export default function App() {
             <Route path="/history" element={<History />} />
             <Route path="/compare" element={<Compare />} />
             <Route path="/share/:shareId" element={<Share />} />
-            <Route path="/pricing" element={<Pricing />} />
           </Routes>
         </main>
       </div>

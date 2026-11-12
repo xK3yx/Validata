@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import api from '../api/client';
 import ScoreBadge from '../components/ScoreBadge';
 import IdeaRadarChart from '../components/IdeaRadarChart';
-import { getClientId } from '../utils/clientId';
 
 const INDUSTRIES = [
   'Technology', 'Healthcare', 'Finance', 'Education',
@@ -74,9 +73,7 @@ export default function Compare() {
     }
     setLoading(true); setError(''); setResult(null);
     try {
-      const { data } = await api.post('/compare', { idea_a: formA, idea_b: formB }, {
-        headers: { 'X-Client-ID': getClientId() }
-      });
+      const { data } = await api.post('/compare', { idea_a: formA, idea_b: formB });
       setResult(data);
       setTimeout(() => document.getElementById('compare-results')?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (err) {

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import ScoreBadge from '../components/ScoreBadge';
 import ReportCard from '../components/ReportCard';
+import { MarketSizeBadge, SourcesCard } from '../components/Sources';
 
 const VERDICT_CONFIG = {
   'Highly Promising': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-500' },
@@ -107,12 +108,7 @@ export default function Share() {
             </div>
             <span className="text-sm font-medium text-slate-300">{report.market_opportunity?.score}/10</span>
           </div>
-          {report.market_opportunity?.market_size && (
-            <div className="mb-3 inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
-              <span className="text-xs text-slate-400">TAM:</span>
-              <span className="text-sm font-semibold text-emerald-400">{report.market_opportunity.market_size}</span>
-            </div>
-          )}
+          <MarketSizeBadge report={report} className="mb-3" />
           <p className="text-slate-400 text-sm leading-relaxed">{report.market_opportunity?.analysis}</p>
         </ReportCard>
         <ReportCard className="p-6" delay={200}>
@@ -158,6 +154,8 @@ export default function Share() {
           </table>
         </div>
       </ReportCard>
+
+      <SourcesCard sources={report.sources} />
 
       {/* CTA */}
       <div className="text-center py-8 bg-[#111118] border border-[#1e1e2e] rounded-2xl">

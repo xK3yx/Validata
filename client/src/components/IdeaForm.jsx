@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/client';
-import { getClientId } from '../utils/clientId';
 
 const INDUSTRIES = [
   'Technology', 'Healthcare', 'Finance', 'Education',
@@ -42,9 +41,7 @@ export default function IdeaForm({ onUsageUpdate }) {
         payload.refinement_context = refinement.refinementContext;
       }
 
-      const { data } = await api.post('/validate', payload, {
-        headers: { 'X-Client-ID': getClientId() }
-      });
+      const { data } = await api.post('/validate', payload);
 
       if (onUsageUpdate) onUsageUpdate(data.remaining);
       navigate(`/results/${data.id}`, {
@@ -133,9 +130,6 @@ export default function IdeaForm({ onUsageUpdate }) {
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           {error}
-          {error.includes('limit') && (
-            <Link to="/pricing" className="ml-auto text-indigo-400 hover:text-indigo-300 font-medium whitespace-nowrap">Upgrade →</Link>
-          )}
         </div>
       )}
 

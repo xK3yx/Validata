@@ -34,7 +34,7 @@ export default function Home() {
           ) : (
             <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-4 py-1.5 mb-6">
               <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-              <span className="text-xs text-indigo-400 font-medium">Powered by Llama 3.3 70B</span>
+              <span className="text-xs text-indigo-400 font-medium">Grounded in live web research</span>
             </div>
           )}
 
@@ -73,8 +73,8 @@ export default function Home() {
             <div className="flex items-center justify-center gap-6 mt-8 flex-wrap">
               {[
                 { label: 'Analysis Depth', value: '9 Dimensions' },
-                { label: 'Response Time', value: '~15 sec' },
-                { label: 'AI Model', value: 'Llama 3.3 70B' },
+                { label: 'Response Time', value: '~10 sec' },
+                { label: 'Cited Web Sources', value: 'Up to 8' },
               ].map(stat => (
                 <div key={stat.label} className="text-center">
                   <div className="font-heading font-semibold text-white text-sm">{stat.value}</div>

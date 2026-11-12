@@ -1,37 +1,33 @@
 const express = require('express');
-const router = express.Router();
-const { getAllAnalyses, getAnalysisById, deleteAnalysis } = require('../db');
+const { getAnalysesForClient, getAnalysisForClient, deleteAnalysisForClient } = require('../db');
+const { requireClientId } = require('../middleware/client');
 
+const router = express.Router();
+router.use(requireClientId);
+
+function parseId(raw) {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+// History only ever returns analyses created by the requesting browser.
 router.get('/', (req, res) => {
-  try {
-    const analyses = getAllAnalyses();
-    return res.json(analyses);
-  } catch (err) {
-    console.error('History fetch error:', err);
-    return res.status(500).json({ error: 'Failed to fetch history.' });
-  }
+  res.json(getAnalysesForClient(req.clientId));
 });
 
 router.get('/:id', (req, res) => {
-  try {
-    const analysis = getAnalysisById(Number(req.params.id));
-    if (!analysis) return res.status(404).json({ error: 'Analysis not found.' });
-    return res.json(analysis);
-  } catch (err) {
-    console.error('History fetch by id error:', err);
-    return res.status(500).json({ error: 'Failed to fetch analysis.' });
-  }
+  const id = parseId(req.params.id);
+  const analysis = id && getAnalysisForClient(id, req.clientId);
+  if (!analysis) return res.status(404).json({ error: 'Analysis not found.' });
+  res.json(analysis);
 });
 
 router.delete('/:id', (req, res) => {
-  try {
-    const deleted = deleteAnalysis(Number(req.params.id));
-    if (!deleted) return res.status(404).json({ error: 'Analysis not found.' });
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('Delete error:', err);
-    return res.status(500).json({ error: 'Failed to delete analysis.' });
+  const id = parseId(req.params.id);
+  if (!id || !deleteAnalysisForClient(id, req.clientId)) {
+    return res.status(404).json({ error: 'Analysis not found.' });
   }
+  res.json({ success: true });
 });
 
 module.exports = router;

@@ -1,39 +1,43 @@
 const express = require('express');
-const router = express.Router();
 const { analyzeIdea } = require('../groq');
-const { saveAnalysis, checkAndIncrementUsage, getUsageInfo } = require('../db');
+const { researchIdea } = require('../serper');
+const { saveAnalysis, reserveUsage, releaseUsage, getUsageInfo } = require('../db');
+const { requireClientId } = require('../middleware/client');
+const { body, IdeaSchema } = require('../middleware/validate');
+
+const router = express.Router();
+router.use(requireClientId);
 
 // GET /api/validate/usage
 router.get('/usage', (req, res) => {
-  const clientId = req.headers['x-client-id'] || null;
-  res.json(getUsageInfo(clientId));
+  res.json(getUsageInfo(req.clientId));
 });
 
 // POST /api/validate
-router.post('/', async (req, res) => {
-  const { idea_title, idea_description, target_audience, industry, refinement_context } = req.body;
-  const clientId = req.headers['x-client-id'] || null;
-
-  if (!idea_title || !idea_description) {
-    return res.status(400).json({ error: 'idea_title and idea_description are required.' });
-  }
-
-  const usage = checkAndIncrementUsage(clientId);
+router.post('/', body(IdeaSchema), async (req, res) => {
+  const idea = req.body;
+  const usage = reserveUsage(req.clientId, 1);
   if (!usage.allowed) {
     return res.status(429).json({
-      error: 'Daily limit reached (5 free validations/day). Upgrade to Pro for unlimited access.',
-      upgrade: true, remaining: 0,
+      error: 'Daily limit reached (5 free validations per day). It resets at midnight UTC.',
+      remaining: 0,
     });
   }
 
   try {
-    const report = await analyzeIdea({ idea_title, idea_description, target_audience, industry, refinement_context });
-    const viability_score = report.viability_score;
-    const { id, share_id } = saveAnalysis({ idea_title, idea_description, target_audience, industry, report, viability_score });
-    return res.json({ id, share_id, report, viability_score, remaining: usage.remaining });
+    const sources = await researchIdea(idea);
+    const report = await analyzeIdea(idea, sources);
+    const { id, share_id } = saveAnalysis({
+      ...idea,
+      client_id: req.clientId,
+      report,
+      viability_score: report.viability_score,
+    });
+    return res.json({ id, share_id, report, viability_score: report.viability_score, remaining: usage.remaining });
   } catch (err) {
+    releaseUsage(req.clientId, 1);
     console.error('Validation error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to analyze idea. Please try again.' });
+    return res.status(502).json({ error: 'The AI analysis failed. Your free validation was not used. Please try again.' });
   }
 });
 

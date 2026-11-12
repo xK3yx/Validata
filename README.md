@@ -1,13 +1,14 @@
 # Validata - AI Startup Idea Validator
 
-Validate your startup or SaaS idea in seconds with a comprehensive AI-powered report. Powered by **Llama 3.3 70B** via Groq.
+Validate your startup or SaaS idea with an AI-powered report grounded in live web search results. Runs on Groq (`openai/gpt-oss-120b` by default) with Serper for research.
 
-![Validata](https://img.shields.io/badge/AI-Llama%203.3%2070B-6366f1?style=flat-square) ![Stack](https://img.shields.io/badge/Stack-React%20%2B%20Node.js-10b981?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-f59e0b?style=flat-square)
+[![CI](https://github.com/xK3yx/Validata/actions/workflows/ci.yml/badge.svg)](https://github.com/xK3yx/Validata/actions/workflows/ci.yml) ![AI](https://img.shields.io/badge/AI-Groq-6366f1?style=flat-square) ![Stack](https://img.shields.io/badge/Stack-React%20%2B%20Node.js-10b981?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-f59e0b?style=flat-square)
 
 ---
 
 ## Features
 
+- **Grounded in real search results** — before analysis, the server searches the web for competitors and market data; the report cites them as [1], [2]… and links each market size figure to its source (or labels it an AI estimate)
 - **9-Dimension Analysis** — Market opportunity, competition, monetization, risks, MVP features, pivot suggestions, and more
 - **Viability Score** — 0–100 score with verdict (Highly Promising → Risky)
 - **Head-to-Head Comparison** — Submit two ideas simultaneously and get a side-by-side AI battle with radar chart
@@ -16,8 +17,9 @@ Validate your startup or SaaS idea in seconds with a comprehensive AI-powered re
 - **AI Follow-up Chat** — Ask the AI anything about your idea after validation
 - **PDF Export** — Download a polished 2-page PDF report — client-side, no server roundtrip
 - **Public Share Links** — Share any report via a unique URL
-- **History & Trends** — View all past analyses with a score trend chart
-- **Usage Tracking** — 5 free validations per day per browser
+- **Private History & Trends** — Past analyses with a score trend chart, visible only to the browser that created them
+- **Usage Limits** — 5 free validations per browser per day (failed AI calls don't count), plus a per-IP hourly cap
+- **Validated AI output** — every report is checked against a schema (Zod) and retried if the model returns malformed JSON
 
 ---
 
@@ -30,8 +32,10 @@ Validate your startup or SaaS idea in seconds with a comprehensive AI-powered re
 | PDF | @react-pdf/renderer (client-side) |
 | Backend | Node.js, Express |
 | Database | SQLite via better-sqlite3 |
-| AI | Groq SDK — Llama 3.3 70B Versatile |
-| Competitor Research | Serper API (google.serper.dev) |
+| AI | Groq SDK — `openai/gpt-oss-120b` (configurable via `GROQ_MODEL`) |
+| Web Research | Serper API (google.serper.dev) |
+| Validation & Security | Zod, Helmet, express-rate-limit |
+| Tests | Node test runner + Supertest |
 
 ---
 
@@ -39,9 +43,9 @@ Validate your startup or SaaS idea in seconds with a comprehensive AI-powered re
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - [Groq API key](https://console.groq.com) (free)
-- [Serper API key](https://serper.dev) (optional — for competitor deep dive)
+- [Serper API key](https://serper.dev) (optional — enables grounded reports and competitor deep dive)
 
 ### Installation
 
@@ -56,13 +60,14 @@ npm run install:all
 
 ### Environment Setup
 
-Create a `.env` file in the project root:
+Copy `.env.example` to `.env` in the project root and add your keys:
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
 SERPER_API_KEY=your_serper_api_key_here   # optional
-PORT=3001
 ```
+
+`.env.example` documents the other settings (model, port, CORS origin, rate limits).
 
 ### Running in Development
 
@@ -78,6 +83,14 @@ This starts both the Express server (port 3001) and Vite dev server (port 5173) 
 | http://localhost:3001 | API server |
 | http://localhost:3001/api/health | Health check |
 
+### Running Tests
+
+```bash
+npm test
+```
+
+The API tests use an in-memory database and stub the Groq and Serper calls, so no keys are needed.
+
 ---
 
 ## Project Structure
@@ -85,10 +98,13 @@ This starts both the Express server (port 3001) and Vite dev server (port 5173) 
 ```
 validata/
 ├── server/
-│   ├── index.js          # Express entry point
-│   ├── db.js             # SQLite schema + queries
-│   ├── groq.js           # Groq AI integration (analyzeIdea, compareIdeas, chat)
-│   ├── serper.js         # Competitor research via Serper API
+│   ├── index.js          # Entry point: env checks, DB init, listen
+│   ├── app.js            # Express app: security headers, rate limits, routes
+│   ├── db.js             # SQLite schema, migrations, per-browser queries
+│   ├── groq.js           # Groq calls, report schema validation, retries
+│   ├── serper.js         # Web research for grounding + competitor lookup
+│   ├── middleware/       # X-Client-ID check, request body validation
+│   ├── test/             # API and report-parsing tests
 │   └── routes/
 │       ├── validate.js   # POST /api/validate, GET /api/validate/usage
 │       ├── history.js    # GET/DELETE /api/history/:id
@@ -98,9 +114,9 @@ validata/
 │       └── share.js      # GET /api/share/:shareId
 ├── client/
 │   └── src/
-│       ├── pages/        # Home, Results, History, Compare, Share, Pricing
-│       ├── components/   # Navbar, IdeaForm, ScoreBadge, ChatWidget, PDFReport, ...
-│       ├── api/          # Axios client (baseURL: /api)
+│       ├── pages/        # Home, Results, History, Compare, Share
+│       ├── components/   # Navbar, IdeaForm, Sources, ChatWidget, PDFReport, ...
+│       ├── api/          # Axios client (adds X-Client-ID to every request)
 │       └── utils/        # clientId (localStorage UUID)
 ├── .env                  # API keys (not committed)
 └── validata.db           # SQLite database (auto-created, not committed)
@@ -109,6 +125,8 @@ validata/
 ---
 
 ## API Reference
+
+Endpoints that read or create analyses require an `X-Client-ID` header (a random per-browser UUID). History is scoped to it; reports are only public through their share link.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -129,18 +147,19 @@ validata/
 
 Each validated idea returns a JSON report with:
 
-```json
+```jsonc
 {
   "viability_score": 72,
-  "verdict": "Promising",
+  "verdict": "Promising",  // derived from the score
   "summary": "...",
-  "market_opportunity": { "score": 8, "analysis": "...", "market_size": "$4.2B TAM" },
+  "market_opportunity": { "score": 8, "analysis": "... [1]", "market_size": "$4.2B TAM", "market_size_source": 1 },
   "competition": { "score": 6, "analysis": "...", "competitors": ["..."] },
   "monetization": { "strategies": [{ "name": "...", "description": "..." }] },
   "risks": [{ "title": "...", "severity": "High|Medium|Low", "description": "..." }],
   "mvp_features": [{ "feature": "...", "priority": "Must Have|Should Have|Nice to Have" }],
   "pivot_suggestions": [{ "title": "...", "description": "...", "key_change": "...", "potential_upside": "..." }],
-  "dimension_scores": { "innovation": 7, "execution_feasibility": 8, "monetization_potential": 7 }
+  "dimension_scores": { "innovation": 7, "execution_feasibility": 8, "monetization_potential": 7 },
+  "sources": [{ "id": 1, "title": "...", "url": "https://...", "snippet": "..." }]
 }
 ```
 
@@ -148,4 +167,4 @@ Each validated idea returns a JSON report with:
 
 ## License
 
-MIT
+[MIT](LICENSE)

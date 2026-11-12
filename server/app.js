@@ -33,7 +33,10 @@ function createApp() {
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
-  app.use('/api/validate', aiLimiter, validateRouter);
+  // Only the POST runs the AI. GET /api/validate/usage is polled on every
+  // page change and must not use up the hourly AI allowance.
+  app.post('/api/validate', aiLimiter);
+  app.use('/api/validate', validateRouter);
   app.use('/api/compare', aiLimiter, compareRouter);
   app.use('/api/chat', aiLimiter, chatRouter);
   app.use('/api/competitor', aiLimiter, competitorRouter);

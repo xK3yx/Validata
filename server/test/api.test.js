@@ -111,3 +111,14 @@ test('malformed JSON bodies return 400', async () => {
     .set('X-Client-ID', clientId('json')).set('Content-Type', 'application/json').send('{bad');
   assert.equal(res.status, 400);
 });
+
+test('polling usage does not use up the hourly AI rate limit', async () => {
+  const client = clientId('poller');
+  for (let i = 0; i < 40; i++) {
+    const res = await request(app).get('/api/validate/usage').set('X-Client-ID', client);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.ratelimit, undefined);
+  }
+  const res = await validate(client);
+  assert.equal(res.status, 200);
+});
